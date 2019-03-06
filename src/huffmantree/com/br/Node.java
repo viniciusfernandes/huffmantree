@@ -13,11 +13,30 @@ public class Node implements Comparable<Node> {
 		return path;
 	}
 
+	public char[] pathAsChars() {
+		return path.toCharArray();
+	}
+
+	public Node(Node leftChild, Node rightChild) {
+		this.chars = unifyChars(leftChild, rightChild);
+		this.leftChild = leftChild;
+
+		this.rightChild = rightChild;
+		this.name = new String(chars);
+		this.character = null;
+		this.path = leftChild.path.substring(0, leftChild.path.length() <= 0 ? 0 : leftChild.path.length() - 1);
+	}
+
 	public Node(char character, long frequency) {
 		this.character = character;
 		this.chars = new char[] { character };
 		this.frequency = frequency;
 		name = new String(chars);
+	}
+
+	public Node(char character, String path, long frequency) {
+		this(character, path);
+		this.frequency = frequency;
 	}
 
 	public Node(char character, String path) {
@@ -41,18 +60,15 @@ public class Node implements Comparable<Node> {
 		this.path = path;
 	}
 
+	public Node getChild(char path) {
+		if (path == '0') {
+			return leftChild;
+		}
+		return rightChild;
+	}
+
 	public Node unify(Node otherNode) {
-		char[] newChars = new char[chars.length + otherNode.chars.length];
-		for (int i = 0; i < chars.length; i++) {
-			newChars[i] = chars[i];
-		}
-
-		final int idx = chars.length;
-		for (int i = 0; i < otherNode.chars.length; i++) {
-			newChars[i + idx] = otherNode.chars[i];
-		}
-
-		Node newNode = new Node(newChars, frequency + otherNode.frequency);
+		Node newNode = new Node(unifyChars(this, otherNode), frequency + otherNode.frequency);
 		if (this.hasHigherFreq(otherNode)) {
 			newNode.leftChild = otherNode;
 			newNode.rightChild = this;
@@ -66,32 +82,17 @@ public class Node implements Comparable<Node> {
 		return newNode;
 	}
 
-	public Node unifyByPath(Node otherNode) {
-		char[] newChars = new char[chars.length + otherNode.chars.length];
-		for (int i = 0; i < chars.length; i++) {
-			newChars[i] = chars[i];
+	private char[] unifyChars(Node minor, Node major) {
+		char[] newChars = new char[minor.chars.length + major.chars.length];
+		for (int i = 0; i < minor.chars.length; i++) {
+			newChars[i] = minor.chars[i];
 		}
 
-		final int idx = chars.length;
-		for (int i = 0; i < otherNode.chars.length; i++) {
-			newChars[i + idx] = otherNode.chars[i];
-		}
-		Node newNode = new Node(newChars, otherNode.path.substring(1));
-		Node refNode = null;
-		if (this.isLeaf()) {
-			refNode = this;
-		} else {
-			refNode = otherNode;
+		for (int i = 0; i < major.chars.length; i++) {
+			newChars[i + minor.chars.length] = major.chars[i];
 		}
 
-		if (refNode.path.charAt(0) == '0') {
-			newNode.leftChild = refNode;
-			newNode.rightChild = this;
-		} else {
-			newNode.leftChild = this;
-			newNode.rightChild = refNode;
-		}
-		return newNode;
+		return newChars;
 	}
 
 	public boolean isLeaf() {
@@ -112,13 +113,14 @@ public class Node implements Comparable<Node> {
 	}
 
 	private void codify(Node node, String path) {
+		node.path = path;
 		if (node.isLeaf()) {
-			node.path = path + node.path;
+			// node.path = path + node.path;
 			return;
 		}
 
-		codify(node.leftChild, path);
-		codify(node.rightChild, path);
+		codify(node.leftChild, node.path + "0");
+		codify(node.rightChild, node.path + "1");
 	}
 
 	public Node getLeftChild() {
@@ -152,10 +154,13 @@ public class Node implements Comparable<Node> {
 	@Override
 	public int compareTo(Node o) {
 		if (frequency == o.frequency) {
-			if (character != null && o.character != null) {
-				return character.compareTo(o.character);
+			if (name.charAt(0) > o.name.charAt(0)) {
+				return 1;
+			} else if (name.charAt(0) < o.name.charAt(0)) {
+				return -1;
 			}
-			return 0;
+			throw new IllegalStateException(
+					"O primeiro caracter do nome dos node nao pode ser igual. Node " + name + " => Node " + o.name);
 		} else if (frequency < o.frequency) {
 			return -1;
 		}
@@ -168,7 +173,7 @@ public class Node implements Comparable<Node> {
 	}
 
 	public String charAndPath() {
-		return character + ":" + path;
+		return character + ":" + path + ":" + frequency;
 	}
 
 	public boolean hasHigherFreq(Node node) {
