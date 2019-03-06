@@ -10,8 +10,6 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.nio.charset.Charset;
-import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -31,8 +29,9 @@ public class HuffmanEncoder {
 	private final File headerFile;
 
 	private final String separator = ";";
-
+	private int totBytes;
 	private int cutoffIndex;
+	private int restBits;
 
 	public HuffmanEncoder(File file) throws IOException {
 		this.inputFile = file;
@@ -50,11 +49,22 @@ public class HuffmanEncoder {
 		encodingFile();
 	}
 
-	private void readingHeaderFile() throws IOException {
+	private void readHeader() throws IOException {
 		final BufferedReader reader = new BufferedReader(new FileReader(headerFile));
 		String line = null;
 		String[] charFreq = null;
+		String[] fileInfo = null;
 		String[] charPath = null;
+		line = reader.readLine();
+		if (line == null) {
+			reader.close();
+			return;
+		}
+
+		fileInfo = line.split(separator);
+		totBytes = Integer.parseInt(fileInfo[0]);
+		cutoffIndex = Integer.parseInt(fileInfo[1]);
+
 		line = reader.readLine();
 		if (line == null) {
 			reader.close();
@@ -72,26 +82,25 @@ public class HuffmanEncoder {
 	}
 
 	public void decode() throws IOException {
-		readingHeaderFile();
+		readHeader();
 		buildHuffmanTree();
 		decodingFile();
 	}
 
 	private void decodingFile() throws IOException {
-		StringBuilder bits = new StringBuilder();
+		StringBuilder bytes = new StringBuilder();
 		InputStream in = new FileInputStream(encodingFile);
-		byte[] bytes = new byte[1];
-		in.read(bytes);
-		for (byte b : bytes) {
-			appendBits(bits, b);
+		byte[] bytesFile = new byte[totBytes];
+		in.read(bytesFile);
+		for (byte b : bytesFile) {
+			appendBits(bytes, b);
 		}
 		in.close();
 
 		BufferedWriter writer = new BufferedWriter(new FileWriter(decondingFile));
-		String encodingString = bits.toString();
-		// char[] encoding = encoding(encodingString.substring(cutoffIndex - 1,
-		// encodingString.length()));
-		char[] encoding = bits.toString().toCharArray();
+		String bits = bytes.toString();
+		bits = bits.substring(0, cutoffIndex);
+		char[] encoding = bits.toCharArray();
 
 		Node node = huffTree;
 		String deconding = "";
@@ -104,16 +113,6 @@ public class HuffmanEncoder {
 		}
 		writer.write(deconding);
 		writer.close();
-	}
-
-	private char[] encoding(String fileBits) {
-		char[] encoding = fileBits.toString().toCharArray();
-		char[] reverted = new char[encoding.length];
-		for (int i = 0; i < reverted.length; i++) {
-			reverted[i] = encoding[reverted.length - 1 - i];
-		}
-		return reverted;
-
 	}
 
 	private void buildHuffmanTree(Node minor, Node major) {
@@ -163,8 +162,8 @@ public class HuffmanEncoder {
 	}
 
 	private void encodingFile() throws IOException {
-		writeHeader();
 		writeContent();
+		writeHeader();
 	}
 
 	private void writeContent() throws IOException {
@@ -193,11 +192,21 @@ public class HuffmanEncoder {
 					encoding.append(node.getPath());
 				}
 			}
-			String encodingString = encoding.toString();
-			cutoffIndex = encodingString.length() % 8;
-			out.write(toByte(encodingString));
-			System.out.println(encodingString);
+			if (encoding.length() <= 8) {
+				restBits = 8 - encoding.length();
+				totBytes = 1;
+				cutoffIndex = 8;
+			} else {
+				restBits = encoding.length() % 8;
+				totBytes = (encoding.length() + restBits) / 8;
+				cutoffIndex = encoding.length();
+			}
 
+			for (int i = 0; i < restBits; i++) {
+				encoding.append("0");
+			}
+
+			out.write(toByte(encoding.toString()));
 		} finally {
 			if (reader != null) {
 				reader.close();
@@ -220,12 +229,8 @@ public class HuffmanEncoder {
 
 	private byte[] toByte(String encoding) {
 		char[] chars = encoding.toCharArray();
-		byte[] bytes = null;
-		if (chars.length % 8 != 0) {
-			bytes = new byte[(chars.length / 8) + 1];
-		} else {
-			bytes = new byte[chars.length / 8];
-		}
+		byte[] bytes = new byte[totBytes];
+
 		int idx = 0;
 		int init = 0;
 		for (int i = 0, j = 1; i < chars.length; j++, i++) {
@@ -237,11 +242,6 @@ public class HuffmanEncoder {
 				init = 0;
 			}
 		}
-		if (idx == bytes.length - 1) {
-			bytes[idx] = (byte) init;
-		} else {
-			throw new IllegalStateException("Falha na geracao da sequencia de bytes do conteudo.");
-		}
 
 		return bytes;
 	}
@@ -252,10 +252,10 @@ public class HuffmanEncoder {
 			writer = new BufferedWriter(new FileWriter(headerFile));
 
 			StringBuilder header = new StringBuilder();
+			header.append(totBytes).append(";").append(cutoffIndex).append("\n");
 			for (Node node : headerList) {
 				header.append(node.charAndPath()).append(separator);
 			}
-			header.append("\n");
 			writer.write(header.toString());
 		} finally {
 			if (writer != null) {
@@ -286,13 +286,6 @@ public class HuffmanEncoder {
 
 		huffman.encode();
 		huffman.decode();
-		// huffman.readBytes();
 	}
 
-	public void readBytes() throws IOException {
-		byte[] bytes = Files.readAllBytes(encodingFile.toPath());
-		for (byte b : bytes) {
-			System.out.println(new String(new byte[] { b }, Charset.defaultCharset()));
-		}
-	}
 }
